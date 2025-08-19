@@ -1,0 +1,222 @@
+class InvestmentSimulation:
+    def __init__(self, start_amount, profit_pct, spent_pct, spend_start_day):
+        self.start_amount = start_amount
+        self.profit_pct = profit_pct / 100
+        self.spent_pct = spent_pct / 100
+        self.spend_start_day = spend_start_day
+        self.data = []
+        self.simulated_days = 0
+        self.run_simulation(365)  # Start with 1 year
+
+    def run_simulation(self, up_to_day):
+        if self.simulated_days >= up_to_day:
+            return
+
+        current_amount = self.data[-1]["Total Amount"] if self.data else self.start_amount
+
+        for day in range(self.simulated_days + 1, up_to_day + 1):
+            profit_generated = current_amount * self.profit_pct
+            profit_spent = profit_generated * self.spent_pct if day >= self.spend_start_day else 0
+            profit_reinvested = profit_generated - profit_spent
+            total_amount = current_amount + profit_reinvested
+
+            self.data.append({
+                "Day": day,
+                "Current Amount": round(current_amount, 2),
+                "Profit Generated": round(profit_generated, 2),
+                "Profit Spent": round(profit_spent, 2),
+                "Profit Reinvested": round(profit_reinvested, 2),
+                "Total Amount": round(total_amount, 2)
+            })
+
+            current_amount = total_amount
+
+        self.simulated_days = up_to_day
+
+    def get_monthly_block(self, month):
+        start_day = (month - 1) * 30 + 1
+        end_day = start_day + 29
+        self.run_simulation(end_day)
+        return self.get_range_summary(start_day, end_day)
+
+    def get_range_summary(self, start_day, end_day):
+        self.run_simulation(end_day)
+        rows = [r for r in self.data if start_day <= r["Day"] <= end_day]
+        if not rows:
+            return None, None
+
+        table = rows
+        start_amt = rows[0]["Current Amount"]
+        end_amt = rows[-1]["Total Amount"]
+        total_profit = sum(r["Profit Generated"] for r in rows)
+        total_spent = sum(r["Profit Spent"] for r in rows)
+        total_reinvested = sum(r["Profit Reinvested"] for r in rows)
+        profit_per_day = total_profit / len(rows)
+        avg_spent_per_day = total_spent / len(rows)
+        growth_rate = ((end_amt - start_amt) / start_amt) * 100
+
+        summary = {
+            "Start Amount": round(start_amt, 2),
+            "End Amount": round(end_amt, 2),
+            "Profit Generated": round(total_profit, 2),
+            "Profit Spent": round(total_spent, 2),
+            "Profit Reinvested": round(total_reinvested, 2),
+            "Monthly Growth Rate (%)": round(growth_rate, 2),
+            "Average Profit per Day": round(profit_per_day, 2),
+            "Average Profit Spent per Day": round(avg_spent_per_day, 2)
+        }
+
+        return table, summary
+
+    def get_day_details(self, day):
+        self.run_simulation(day)
+        return self.data[day - 1] if 1 <= day <= len(self.data) else None
+
+    def get_range_columns(self, start_day, end_day, columns):
+        self.run_simulation(end_day)
+        return [
+            {col: row[col] for col in columns}
+            for row in self.data if start_day <= row["Day"] <= end_day
+        ]
+
+
+def print_table(data, columns=None):
+    if not data:
+        print("No data.")
+        return
+    if not columns:
+        columns = data[0].keys()
+    header = " | ".join(f"{col:>16}" for col in columns)
+    print("-" * len(header))
+    print(header)
+    print("-" * len(header))
+    for row in data:
+        print(" | ".join(f"{str(row[col]):>16}" for col in columns))
+    print("-" * len(header))
+
+
+def run_menu():
+    start_amount = float(input("Enter starting amount (e.g., 1000): "))
+    profit_pct = float(input("Enter daily profit percentage (e.g., 3): "))
+    spent_pct = float(input("Enter profit spent percentage (e.g., 20): "))
+    spend_start_day = int(input("Enter the day profit spending starts (e.g., 121): "))
+
+    sim = InvestmentSimulation(start_amount, profit_pct, spent_pct, spend_start_day)
+
+    while True:
+        print("\nMenu:")
+        print("1) View table and summary for a specific month")
+        print("2) View table and summary for a range of days or months")
+        print("3) View all columns details for a specific day")
+        print("4) View desired columns for a range of days or months")
+        print("5) Change any input parameter value")
+        print("0) Exit")
+
+        choice = input("Enter your choice: ").strip()
+
+        if choice == "1":
+            month = int(input("Enter month number (1 = Days 1-30, etc.): "))
+            table, summary = sim.get_monthly_block(month)
+            if table:
+                print_table(table)
+                print("\nSummary:")
+                for k, v in summary.items():
+                    print(f"{k}: {v}")
+            else:
+                print("No data for this month.")
+
+        elif choice == "2":
+            mode = input("Do you want to enter a (1) range of days or (2) range of months? Enter 1 or 2: ").strip()
+
+            if mode == "1":
+                start_day = int(input("Enter start day: "))
+                end_day = int(input("Enter end day: "))
+                table, summary = sim.get_range_summary(start_day, end_day)
+
+                if table:
+                    print_table(table)
+                    print("\nSummary:")
+                    for k, v in summary.items():
+                        print(f"{k}: {v}")
+                else:
+                    print("Invalid range.")
+
+            elif mode == "2":
+                start_month = int(input("Enter start month (1 = Days 1–30, etc.): "))
+                end_month = int(input("Enter end month: "))
+
+                if start_month > end_month or start_month < 1:
+                    print("Invalid month range.")
+                    continue
+
+                for month in range(start_month, end_month + 1):
+                    print(f"\n=== Month {month} (Days {(month - 1)*30 + 1} to {month * 30}) ===")
+                    table, summary = sim.get_monthly_block(month)
+                    if table:
+                        print_table(table)
+                        print("\nSummary:")
+                        for k, v in summary.items():
+                            print(f"{k}: {v}")
+                    else:
+                        print("No data for this month.")
+            else:
+                print("Invalid choice. Returning to menu.")
+
+        elif choice == "3":
+            day = int(input("Enter day number: "))
+            row = sim.get_day_details(day)
+            if row:
+                print("\nDetails:")
+                for k, v in row.items():
+                    print(f"{k}: {v}")
+            else:
+                print("Invalid day.")
+
+        elif choice == "4":
+            start_day = int(input("Enter start day: "))
+            end_day = int(input("Enter end day: "))
+            print("Available columns: Day, Current Amount, Profit Generated, Profit Spent, Profit Reinvested, Total Amount")
+            cols_input = input("Enter columns separated by comma: ").split(",")
+            columns = [col.strip() for col in cols_input]
+            data = sim.get_range_columns(start_day, end_day, columns)
+            print_table(data, columns)
+
+        elif choice == "5":
+            print("\nWhich parameter would you like to change?")
+            print("1) Starting amount")
+            print("2) Daily profit percentage")
+            print("3) Profit spent percentage")
+            print("4) Day when profit spending starts")
+            print("5) Change all")
+            param_choice = input("Enter your choice (1-5): ")
+
+            if param_choice == "1":
+                start_amount = float(input("Enter new starting amount: "))
+            elif param_choice == "2":
+                profit_pct = float(input("Enter new daily profit percentage: "))
+            elif param_choice == "3":
+                spent_pct = float(input("Enter new profit spent percentage: "))
+            elif param_choice == "4":
+                spend_start_day = int(input("Enter new profit spending start day: "))
+            elif param_choice == "5":
+                start_amount = float(input("Enter new starting amount: "))
+                profit_pct = float(input("Enter new daily profit percentage: "))
+                spent_pct = float(input("Enter new profit spent percentage: "))
+                spend_start_day = int(input("Enter new profit spending start day: "))
+            else:
+                print("Invalid choice. Returning to main menu.")
+                continue
+
+            sim = InvestmentSimulation(start_amount, profit_pct, spent_pct, spend_start_day)
+            print("Simulation parameters updated.")
+
+        elif choice == "0":
+            print("Exiting program.")
+            break
+
+        else:
+            print("Invalid choice. Please select a valid option.")
+
+
+# Start the program
+run_menu()
